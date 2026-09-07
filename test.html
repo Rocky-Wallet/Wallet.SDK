@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rocky Wallet 多链连接与签名测试</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: #17202a;
+        background: #f5f7fb;
+        --ink: #17202a;
+        --muted: #667085;
+        --line: #dce2ea;
+        --panel: #ffffff;
+        --primary: #1467e8;
+        --primary-hover: #0f55c3;
+        --success: #067647;
+        --success-bg: #ecfdf3;
+        --danger: #b42318;
+        --danger-bg: #fef3f2;
+        --warning: #b54708;
+        --warning-bg: #fffaeb;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        min-width: 320px;
+        min-height: 100vh;
+        background:
+          radial-gradient(circle at 12% 0%, rgba(255, 190, 117, 0.24), transparent 28rem),
+          radial-gradient(circle at 90% 8%, rgba(108, 209, 244, 0.24), transparent 30rem),
+          #f5f7fb;
+      }
+
+      button, input, textarea, select { font: inherit; }
+
+      button {
+        border: 0;
+        cursor: pointer;
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.55;
+      }
+
+      .page {
+        width: min(1120px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 36px 0 64px;
+      }
+
+      header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 24px;
+      }
+
+      h1, h2, p { margin-top: 0; }
+      h1 { margin-bottom: 8px; font-size: clamp(28px, 5vw, 42px); letter-spacing: -0.04em; }
+      h2 { margin-bottom: 4px; font-size: 20px; }
+      .subtitle { margin-bottom: 0; color: var(--muted); }
+
+      .actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
+      .button {
+        min-height: 42px;
+        padding: 0 16px;
+        border-radius: 12px;
+        font-weight: 700;
+        transition: 120ms ease;
+      }
+      .button-primary { color: #fff; background: var(--primary); }
+      .button-primary:hover:not(:disabled) { background: var(--primary-hover); }
+      .button-secondary { color: var(--ink); background: #fff; box-shadow: inset 0 0 0 1px var(--line); }
+      .button-secondary:hover:not(:disabled) { background: #f8fafc; }
+
+      .notice, .summary, .message-panel, .card, .log-panel {
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.94);
+        box-shadow: 0 12px 36px rgba(26, 37, 53, 0.06);
+      }
+
+      .notice { display: none; margin-bottom: 18px; padding: 14px 16px; color: var(--warning); background: var(--warning-bg); }
+      .notice.visible { display: block; }
+
+      .summary {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 1px;
+        overflow: hidden;
+        margin-bottom: 18px;
+        background: var(--line);
+      }
+
+      .metric { min-height: 90px; padding: 18px; background: #fff; }
+      .metric-label { display: block; margin-bottom: 8px; color: var(--muted); font-size: 13px; font-weight: 700; }
+      .metric-value { display: block; overflow: hidden; font-size: 16px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+
+      .message-panel { margin-bottom: 18px; padding: 18px; }
+      label { display: block; margin-bottom: 8px; font-size: 14px; font-weight: 800; }
+      textarea, select {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        color: var(--ink);
+        background: #fff;
+        outline: none;
+      }
+      textarea { min-height: 88px; padding: 12px 14px; resize: vertical; }
+      select { min-height: 42px; padding: 0 38px 0 12px; }
+      textarea:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(20, 103, 232, 0.12); }
+
+      .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+      .card { overflow: hidden; }
+      .card-head { display: flex; gap: 12px; align-items: center; padding: 18px; border-bottom: 1px solid var(--line); }
+      .chain-icon { display: grid; width: 44px; height: 44px; flex: 0 0 44px; place-items: center; border-radius: 14px; color: #fff; font-size: 14px; font-weight: 900; }
+      .canton .chain-icon { color: #d7ff39; background: #0c1014; }
+      .evm .chain-icon { background: #627eea; }
+      .solana .chain-icon { background: linear-gradient(145deg, #9945ff, #14f195); }
+      .status { margin-left: auto; padding: 5px 9px; border-radius: 999px; color: var(--muted); background: #f2f4f7; font-size: 12px; font-weight: 800; }
+      .status.success { color: var(--success); background: var(--success-bg); }
+      .status.error { color: var(--danger); background: var(--danger-bg); }
+      .status.running { color: var(--primary); background: #eff6ff; }
+
+      .card-body { padding: 18px; }
+      .field { margin-bottom: 16px; }
+      .address {
+        min-height: 42px;
+        padding: 11px 12px;
+        border-radius: 12px;
+        overflow-wrap: anywhere;
+        color: var(--muted);
+        background: #f7f8fa;
+        font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      .card-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      .card-result {
+        min-height: 118px;
+        max-height: 220px;
+        margin: 16px 0 0;
+        padding: 12px;
+        overflow: auto;
+        border-radius: 12px;
+        color: #d7e1ec;
+        background: #111827;
+        font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .log-panel { margin-top: 18px; padding: 18px; }
+      .log-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+      #activity-log { min-height: 120px; max-height: 300px; }
+
+      @media (max-width: 850px) {
+        header { flex-direction: column; }
+        .actions { justify-content: flex-start; }
+        .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .grid { grid-template-columns: 1fr; }
+      }
+
+      @media (max-width: 520px) {
+        .page { width: min(100% - 20px, 1120px); padding-top: 22px; }
+        .summary { grid-template-columns: 1fr; }
+        .card-actions { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header>
+        <div>
+          <h1>Rocky Wallet 多链测试</h1>
+          <p class="subtitle">验证 Canton、EVM、Solana 的连接、账户与消息签名。</p>
+        </div>
+        <div class="actions">
+          <button class="button button-secondary" id="availability-button" type="button">检测扩展</button>
+          <button class="button button-primary" id="connect-button" type="button">连接全部网络</button>
+          <button class="button button-secondary" id="disconnect-button" type="button">断开连接</button>
+        </div>
+      </header>
+
+      <div class="notice" id="protocol-notice" role="alert">
+        当前通过 file:// 打开。请在此目录运行 <code>python3 -m http.server 4173</code>，然后访问
+        <code>http://localhost:4173/test.html</code>，否则浏览器扩展可能不会注入 Provider。
+      </div>
+
+      <section class="summary" aria-label="连接摘要">
+        <div class="metric"><span class="metric-label">页面来源</span><span class="metric-value" id="origin-value">—</span></div>
+        <div class="metric"><span class="metric-label">扩展版本</span><span class="metric-value" id="version-value">未检测</span></div>
+        <div class="metric"><span class="metric-label">会话状态</span><span class="metric-value" id="session-value">未连接</span></div>
+        <div class="metric"><span class="metric-label">已启用命名空间</span><span class="metric-value" id="namespace-value">—</span></div>
+      </section>
+
+      <section class="message-panel">
+        <label for="message-input">待签名消息</label>
+        <textarea id="message-input">Rocky Wallet multichain signing test</textarea>
+      </section>
+
+      <section class="grid" aria-label="网络测试">
+        <article class="card canton" data-namespace="canton">
+          <div class="card-head">
+            <div class="chain-icon">C</div>
+            <div><h2>Canton</h2><p class="subtitle">Canton Mainnet</p></div>
+            <span class="status" data-role="status">未连接</span>
+          </div>
+          <div class="card-body">
+            <div class="field">
+              <label for="canton-chain">网络</label>
+              <select id="canton-chain" data-role="chain"><option value="canton:production">canton:production</option></select>
+            </div>
+            <div class="field">
+              <label>账户</label>
+              <div class="address" data-role="address">—</div>
+            </div>
+            <div class="card-actions">
+              <button class="button button-secondary" data-action="test-connection" type="button" disabled>测试连接</button>
+              <button class="button button-primary" data-action="sign" type="button" disabled>签名消息</button>
+            </div>
+            <pre class="card-result" data-role="result">等待测试</pre>
+          </div>
+        </article>
+
+        <article class="card evm" data-namespace="eip155">
+          <div class="card-head">
+            <div class="chain-icon">EVM</div>
+            <div><h2>EVM</h2><p class="subtitle">EIP-155 网络</p></div>
+            <span class="status" data-role="status">未连接</span>
+          </div>
+          <div class="card-body">
+            <div class="field">
+              <label for="evm-chain">网络</label>
+              <select id="evm-chain" data-role="chain"><option value="eip155:1">eip155:1</option></select>
+            </div>
+            <div class="field">
+              <label>账户</label>
+              <div class="address" data-role="address">—</div>
+            </div>
+            <div class="card-actions">
+              <button class="button button-secondary" data-action="test-connection" type="button" disabled>测试连接</button>
+              <button class="button button-primary" data-action="sign" type="button" disabled>签名消息</button>
+            </div>
+            <pre class="card-result" data-role="result">等待测试</pre>
+          </div>
+        </article>
+
+        <article class="card solana" data-namespace="solana">
+          <div class="card-head">
+            <div class="chain-icon">SOL</div>
+            <div><h2>Solana</h2><p class="subtitle">Solana Mainnet</p></div>
+            <span class="status" data-role="status">未连接</span>
+          </div>
+          <div class="card-body">
+            <div class="field">
+              <label for="solana-chain">网络</label>
+              <select id="solana-chain" data-role="chain"><option value="solana:mainnet">solana:mainnet</option></select>
+            </div>
+            <div class="field">
+              <label>账户</label>
+              <div class="address" data-role="address">—</div>
+            </div>
+            <div class="card-actions">
+              <button class="button button-secondary" data-action="test-connection" type="button" disabled>测试连接</button>
+              <button class="button button-primary" data-action="sign" type="button" disabled>签名消息</button>
+            </div>
+            <pre class="card-result" data-role="result">等待测试</pre>
+          </div>
+        </article>
+      </section>
+
+      <section class="log-panel">
+        <div class="log-title">
+          <div><h2>活动日志</h2><p class="subtitle">结果仅保留在当前页面。</p></div>
+          <button class="button button-secondary" id="clear-log-button" type="button">清空</button>
+        </div>
+        <pre class="card-result" id="activity-log">页面已加载</pre>
+      </section>
+    </main>
+
+    <script type="module">
+      import { rockyWallet } from "./dist/index.js";
+
+      const state = { session: null };
+      const namespaceCards = Object.fromEntries(
+        [...document.querySelectorAll("[data-namespace]")].map((card) => [card.dataset.namespace, card]),
+      );
+      const logElement = document.querySelector("#activity-log");
+
+      document.querySelector("#origin-value").textContent = location.origin;
+      document.querySelector("#protocol-notice").classList.toggle("visible", location.protocol === "file:");
+
+      function timestamp() {
+        return new Date().toLocaleTimeString("zh-CN", { hour12: false });
+      }
+
+      function serialize(value) {
+        return JSON.stringify(value, (_key, nested) => {
+          if (nested instanceof Uint8Array) return { type: "Uint8Array", length: nested.length };
+          return nested;
+        }, 2);
+      }
+
+      function errorDetails(error) {
+        return {
+          name: error?.name || "Error",
+          code: error?.code,
+          message: error?.message || String(error),
+          ...(error?.data === undefined ? {} : { data: error.data }),
+        };
+      }
+
+      function log(label, value) {
+        const text = typeof value === "string" ? value : serialize(value);
+        logElement.textContent = `[${timestamp()}] ${label}\n${text}\n\n${logElement.textContent}`.trim();
+      }
+
+      function setCardStatus(namespace, label, kind = "") {
+        const status = namespaceCards[namespace].querySelector("[data-role=status]");
+        status.textContent = label;
+        status.className = `status ${kind}`.trim();
+      }
+
+      function setCardResult(namespace, value) {
+        namespaceCards[namespace].querySelector("[data-role=result]").textContent =
+          typeof value === "string" ? value : serialize(value);
+      }
+
+      function getChainId(namespace) {
+        return namespaceCards[namespace].querySelector("[data-role=chain]").value;
+      }
+
+      function getAddress(namespace) {
+        return state.session?.rocky?.primaryAddresses?.[namespace] || "";
+      }
+
+      function chainIdsFor(namespace, session) {
+        return Object.keys(session?.rocky?.accountsByChain || {}).filter((chainId) => chainId.startsWith(`${namespace}:`));
+      }
+
+      function renderSession(session) {
+        state.session = session;
+        const enabled = session?.rocky?.enabledNamespaces || [];
+        document.querySelector("#session-value").textContent = "已连接";
+        document.querySelector("#namespace-value").textContent = enabled.join(", ") || "—";
+
+        for (const [namespace, card] of Object.entries(namespaceCards)) {
+          const select = card.querySelector("[data-role=chain]");
+          const fallback = select.value;
+          const chainIds = chainIdsFor(namespace, session);
+          const activeChain = session?.rocky?.activeChains?.[namespace];
+          const choices = chainIds.length ? chainIds : [fallback];
+          select.replaceChildren(...choices.map((chainId) => new Option(chainId, chainId)));
+          if (activeChain && choices.includes(activeChain)) select.value = activeChain;
+          card.querySelector("[data-role=address]").textContent = getAddress(namespace) || "该钱包未提供此链账户";
+          const available = enabled.includes(namespace) && Boolean(getAddress(namespace));
+          setCardStatus(namespace, available ? "已授权" : "不可用", available ? "success" : "error");
+          for (const button of card.querySelectorAll("[data-action]")) button.disabled = !available;
+        }
+      }
+
+      async function withCardOperation(namespace, operation, task) {
+        const card = namespaceCards[namespace];
+        const buttons = [...card.querySelectorAll("button")];
+        buttons.forEach((button) => { button.disabled = true; });
+        setCardStatus(namespace, "处理中", "running");
+        setCardResult(namespace, `${operation}处理中，请在 Rocky Wallet 中确认（如有提示）…`);
+        try {
+          const result = await task();
+          setCardStatus(namespace, "通过", "success");
+          setCardResult(namespace, result);
+          log(`${namespace} ${operation}通过`, result);
+        } catch (error) {
+          const details = errorDetails(error);
+          setCardStatus(namespace, "失败", "error");
+          setCardResult(namespace, details);
+          log(`${namespace} ${operation}失败`, details);
+        } finally {
+          const available = Boolean(getAddress(namespace));
+          buttons.forEach((button) => { button.disabled = !available; });
+        }
+      }
+
+      async function detectExtension() {
+        const result = await rockyWallet.checkExtensionAvailability({ timeoutMs: 2500 });
+        document.querySelector("#version-value").textContent = result.currentVersion || result.status;
+        log("扩展检测", result);
+        return result;
+      }
+
+      async function connect() {
+        const button = document.querySelector("#connect-button");
+        button.disabled = true;
+        button.textContent = "等待钱包确认…";
+        try {
+          const availability = await detectExtension();
+          if (availability.status !== "installed") {
+            throw new Error("未检测到 Rocky Wallet Extension 1.1.0 或更高版本");
+          }
+          const session = await rockyWallet.connect({
+            name: "Rocky Multichain Test",
+            requiredNamespaces: ["canton", "eip155", "solana"],
+            timeoutMs: 120000,
+          });
+          renderSession(session);
+          log("多链连接通过", session);
+        } catch (error) {
+          document.querySelector("#session-value").textContent = "连接失败";
+          log("多链连接失败", errorDetails(error));
+          throw error;
+        } finally {
+          button.disabled = false;
+          button.textContent = "连接全部网络";
+        }
+      }
+
+      async function requireSession() {
+        if (state.session) return state.session;
+        const session = await rockyWallet.getSession({ timeoutMs: 2500 });
+        renderSession(session);
+        return session;
+      }
+
+      async function testConnection(namespace) {
+        await requireSession();
+        const chainId = getChainId(namespace);
+        const address = getAddress(namespace);
+        if (namespace === "canton") {
+          return rockyWallet.request({ chainId, method: "canton_status" });
+        }
+        if (namespace === "eip155") {
+          const [rpcChainId, accounts, balance] = await Promise.all([
+            rockyWallet.request({ chainId, method: "eth_chainId" }),
+            rockyWallet.request({ chainId, method: "eth_accounts" }),
+            rockyWallet.request({ chainId, method: "eth_getBalance", params: [address, "latest"] }),
+          ]);
+          return { requestedChainId: chainId, rpcChainId, accounts, balance };
+        }
+        const [accounts, balance] = await Promise.all([
+          rockyWallet.request({ chainId, method: "solana_accounts" }),
+          rockyWallet.request({ chainId, method: "getBalance", params: [address, { commitment: "confirmed" }] }),
+        ]);
+        return { requestedChainId: chainId, accounts, balance };
+      }
+
+      async function sign(namespace) {
+        await requireSession();
+        const chainId = getChainId(namespace);
+        const address = getAddress(namespace);
+        const message = document.querySelector("#message-input").value.trim();
+        if (!message) throw new Error("待签名消息不能为空");
+
+        if (namespace === "canton") {
+          return rockyWallet.request({
+            chainId,
+            method: "canton_signMessage",
+            params: [{ message, raw: { metaData: { app: "Rocky Multichain Test", purpose: "integration test" } } }],
+            timeoutMs: 120000,
+          });
+        }
+        if (namespace === "eip155") {
+          return rockyWallet.signEvmMessage({ chainId, address, message, timeoutMs: 120000 });
+        }
+        return rockyWallet.signSolanaMessage({
+          chainId,
+          message: new TextEncoder().encode(message),
+          timeoutMs: 120000,
+        });
+      }
+
+      document.querySelector("#availability-button").addEventListener("click", () => {
+        detectExtension().catch((error) => log("扩展检测失败", errorDetails(error)));
+      });
+
+      document.querySelector("#connect-button").addEventListener("click", () => {
+        connect().catch(() => undefined);
+      });
+
+      document.querySelector("#disconnect-button").addEventListener("click", async () => {
+        try {
+          await rockyWallet.disconnect({ timeoutMs: 2500 });
+          state.session = null;
+          document.querySelector("#session-value").textContent = "未连接";
+          document.querySelector("#namespace-value").textContent = "—";
+          for (const namespace of Object.keys(namespaceCards)) setCardStatus(namespace, "未连接");
+          log("已断开连接", { status: true });
+        } catch (error) {
+          log("断开连接失败", errorDetails(error));
+        }
+      });
+
+      document.querySelector("#clear-log-button").addEventListener("click", () => {
+        logElement.textContent = "日志已清空";
+      });
+
+      for (const [namespace, card] of Object.entries(namespaceCards)) {
+        card.querySelector("[data-action=test-connection]").addEventListener("click", () => {
+          withCardOperation(namespace, "连接测试", () => testConnection(namespace));
+        });
+        card.querySelector("[data-action=sign]").addEventListener("click", () => {
+          withCardOperation(namespace, "签名测试", () => sign(namespace));
+        });
+      }
+
+      detectExtension().catch((error) => log("自动检测失败", errorDetails(error)));
+      rockyWallet.getSession({ timeoutMs: 600 }).then(renderSession).catch(() => undefined);
+    </script>
+  </body>
+</html>

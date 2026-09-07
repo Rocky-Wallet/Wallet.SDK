@@ -1,0 +1,39 @@
+{
+  "name": "@rocky-wallet/dapp-sdk",
+  "version": "1.1.0",
+  "description": "Universal multichain dApp SDK for the Rocky Wallet browser extension.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node scripts/build.js",
+    "check": "node --check src/index.js",
+    "prepack": "npm run build",
+    "test": "node --test"
+  },
+  "keywords": [
+    "rocky-wallet",
+    "canton",
+    "evm",
+    "eip-1193",
+    "solana",
+    "caip",
+    "dapp",
+    "wallet",
+    "sdk"
+  ],
+  "license": "MIT"
+}
